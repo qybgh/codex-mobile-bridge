@@ -72,21 +72,28 @@ async function installUpdate(candidate){
   try{fs.writeFileSync(path.join(path.dirname(prepared.plan),'helper.json'),JSON.stringify({pid:child.pid}),{mode:0o600});}catch{}
   let spawnError;child.on('error',error=>{spawnError=error;});child.unref();
   const ready=path.join(path.dirname(prepared.plan),'ready.json'),end=Date.now()+15000;
+  let exiting=false;
+  const exitForHelper=()=>{
+    if(exiting)return;
+    exiting=true;updateQuitting=true;snapshotPending?.catch(()=>{});snapshotWorker.close();
+    // The helper owns gateway shutdown and the bundle swap. A tray, modal
+    // window or platform-specific quit hook must not delay it; otherwise the
+    // helper correctly rolls the transaction back.
+    try{if(typeof app.exit==='function')app.exit(0);else app.quit();}catch{}
+  };
+  // Ready polling is an optimization. The bounded fallback makes controller
+  // exit deterministic even if filesystem notification/poll timing stalls.
+  const fallback=setTimeout(exitForHelper,2000);
   while(Date.now()<end){
-    if(spawnError)throw spawnError;
-    if(child.exitCode!==null)throw Error('无法启动应用更新进程。');
+    if(spawnError){clearTimeout(fallback);throw spawnError;}
+    if(child.exitCode!==null){clearTimeout(fallback);throw Error('无法启动应用更新进程。');}
     try{if(JSON.parse(fs.readFileSync(ready,'utf8')).token===token){
-      updateQuitting=true;if(snapshotPending)await snapshotPending;snapshotWorker.close();
-      setTimeout(()=>app.quit(),300);
-      // Some macOS window/extension states can keep a graceful quit alive.
-      // The helper owns the gateway and waits for this PID, so force exit well
-      // before its 45 second parent timeout instead of cancelling the swap.
-      setTimeout(()=>{releaseTray();try{if(typeof app.exit==='function')app.exit(0);}catch{}},10000);
-      return;
+      clearTimeout(fallback);exitForHelper();return;
     }}catch{}
     await new Promise(resolve=>setTimeout(resolve,100));
   }
-  throw Error('无法启动应用更新进程。');
+  clearTimeout(fallback);
+  throw Error('更新进程已启动，但应用未能退出，更新已取消。');
 }
 function setupUpdater(){
   updater=new Updater({current:app.getVersion(),key:fs.readFileSync(path.join(__dirname,'update-public-key.pem')),

@@ -1,3 +1,8 @@
+## v1.4.1 · 更新退出修复
+
+- 应用更新助手就绪后，控制面板立即使用不可取消的 `app.exit` 退出；不再依赖可能被托盘、窗口关闭钩子或平台状态延迟的 `app.quit`。更新助手继续负责网关停止、应用替换和回滚。
+- Fix update handoff by exiting immediately through non-cancellable `app.exit` once the helper is ready; tray/window quit hooks can no longer delay the transaction and trigger rollback.
+
 ## v1.4.0 · 连接更简单，远程使用更顺畅
 
 - **开箱即用的外网连接**：App 内置 cloudflared，临时 HTTPS 无需额外安装；完善固定 Cloudflare 域名、普通用户 SSH 和 NAS / 已有反代方案。

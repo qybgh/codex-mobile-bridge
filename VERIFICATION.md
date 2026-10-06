@@ -1,3 +1,22 @@
+## v1.4.1 真实 UI 更新交接矩阵与官方 1.3.4 复现（2026-10-06）
+
+- 官方包复现：使用 1.3.4 原始包、官方签名 v1.4.0 更新、真实 Cloudflare Quick Tunnel 已 ready 的运行态。helper 写入 ready 后旧 Electron PID 仍存活，结果为 failed/recovered，错误为“应用尚未退出”；网关与外网隧道保持运行。
+- 修复验收：同一“网关运行 + Quick Tunnel ready”场景下，1.4.1 → 本地 1.4.2 更新通过；旧 Electron exit 0，旧网关 PID 消失，新网关启动且新 Quick Tunnel ready，公网 HTTPS URL 存在。
+- 停止态验收：1.4.1 → 本地 1.4.2 更新通过；更新后网关保持停止。两条场景均通过真实 UI 按钮触发，不外部 kill 控制器。
+- `npm run test:update-controller` 已接入 Desktop 工作流；运行态使用真实 Quick Tunnel，先等待 `trycloudflare.com` ready，更新后继续等待新 URL ready，再断言旧网关退出和新网关健康。
+- 永久测试暴露 ready 轮询偶发错过窗口；补上 2 秒不可取消 `app.exit` 兜底，且不再等待 snapshot promise。更新期间旧 PyInstaller runtime 输出旧 bundle 路径缺失属于 swap 瞬时现象，不作为成功依据。
+- 原始 1.3.4 的 UI 可能在进度后先显示“无法启动应用更新进程”：这是控制层 15 秒 ready 轮询超时；helper 随后在 45 秒写入“应用尚未退出”。两层指向同一退出交接根因。已把超时文案改为“更新进程已启动，但应用未能退出，更新已取消”，只有 helper 进程真正未启动时才保留“无法启动”。
+- 成功夹具自动清理；失败时保留 `.tmp` 供诊断。生产 `/Applications` 安装和网关不受测试影响。
+
+## v1.4.1 更新退出修复（2026-10-06）
+
+- 本机 1.3.4 → 1.4.0 事务保留 `ready.json` 与 `parentPid`；助手在等待原控制器退出时超时，正确记录“应用尚未退出”并回滚。根因是控制器依赖可取消/可延迟的 `app.quit`，而不是助手未启动。
+- 修复后更新助手确认令牌时立即调用不可取消的 `app.exit(0)`；托盘、窗口关闭钩子或平台退出状态不能再延迟 bundle swap。跨端回退仅在 Electron `app.exit` 不可用时使用 `app.quit`。
+- 新增真实 handoff 回归：测试 Electron fake 明确禁止 `quit`，只允许 `exit`，证明更新事务不依赖托盘/窗口关闭路径。
+- macOS 完整 Python 套件 473 项：463 通过、10 项平台条件跳过；Desktop/Web 144 项通过；更新套件 15 通过、1 项 Windows 条件跳过。
+- macOS arm64 v1.4.1 构建通过架构、深度签名和内置 runtime 校验；隔离 App 启动冒烟通过，成功与回滚两条真实打包更新冒烟均通过并保留配置。
+- 未替换 /Applications 中的 1.3.4 生产安装，未停止现有网关，未修改更新凭据或用户数据。
+
 ## v1.4.0 发布候选检查（2026-10-06）
 
 - 用户已验收 Preview 并授权正式发布；保留 PR #11 原始提交历史及 Preview 期间的兼容性修复。

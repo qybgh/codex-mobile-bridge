@@ -575,6 +575,7 @@ const en={
   "请等待当前操作完成后再更新。": "Wait for the current operation to finish before updating.",
   "正在更新应用，请稍候。": "The app is updating. Please wait.",
   "无法启动应用更新进程。": "Could not start the app updater.",
+  "更新进程已启动，但应用未能退出，更新已取消。": "The updater started, but the app did not exit. The update was canceled.",
   "更新版本格式无效。": "Invalid update version.",
   "更新地址未通过来源检查。": "The update URL failed source verification.",
   "此系统暂无应用内更新包。": "No in-app update package is available for this system.",
