@@ -83,6 +83,27 @@ def request_id(item):
     return item.get("clientId") or item.get("clientUserMessageId") or item.get("client_id")
 
 
+def desktop_file_attachments(text):
+    """Extract non-image files embedded by the desktop attachment wrapper."""
+    if not isinstance(text, str) or "# Files mentioned by the user:" not in text:
+        return []
+    marker = "\n## My request:\n"
+    header = text.find("# Files mentioned by the user:")
+    boundary = text.rfind(marker)
+    if header < 0 or boundary <= header:
+        return []
+    section = text[header:boundary]
+    result, image_paths = [], set()
+    for match in re.finditer(r"^## (.+?): (.+)$(?:\nImage attachment: true)?", section, re.MULTILINE):
+        name, path = match.group(1).strip(), match.group(2).strip()
+        if not name or not path or 'Image attachment: true' in match.group(0):
+            continue
+        if any(item.get('path') == path for item in result):
+            continue
+        result.append({'type': 'file', 'name': name})
+    return result
+
+
 def user_display_text(text):
     """Hide desktop attachment plumbing from the phone-visible request."""
     if not isinstance(text, str) or "# Files mentioned by the user:" not in text:
@@ -105,11 +126,15 @@ def normalize_item(item):
         submission_request_id = request_id(item)
         if request_id:
             row["requestId"] = str(submission_request_id)
-        text = user_display_text(text_content(item.get("content", [])))
+        raw_text = text_content(item.get("content", []))
+        text = user_display_text(raw_text)
         replies = question_replies(text)
         if replies:
             text = "\n\n".join(str(r.get("question", "")) + "\n" + str(r.get("answer", "")) for r in replies)
         row.update(role="user", text=text)
+        desktop_attachments = desktop_file_attachments(raw_text)
+        if desktop_attachments:
+            row["attachments"] = desktop_attachments
     elif kind in ("agentMessage", "assistantMessage"):
         row.update(role="assistant", text=item.get("text", ""), phase=item.get("phase"))
     elif kind in ("ImageView", "imageView"):
@@ -145,7 +170,11 @@ def normalize_item(item):
     # Preserve non-text attachment descriptors. They are not fetched from arbitrary URLs.
     attachments = [x for x in item.get("content", []) if isinstance(x, dict) and x.get("type") not in ("text", "input_text", "output_text")] if isinstance(item.get("content"), list) else []
     if attachments:
-        row["attachments"] = attachments
+        if "attachments" not in row:
+            row["attachments"] = attachments
+        else:
+            known = {(x.get('type'), x.get('path'), x.get('name')) for x in row['attachments']}
+            row["attachments"].extend(x for x in attachments if (x.get('type'), x.get('path'), x.get('name')) not in known)
     return row
 
 
